@@ -1,14 +1,15 @@
 import type { Metadata } from "next"
+import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Family Genealogy",
-  description: "Explore and preserve your family history.",
+  title: "Family Tree — Genealogy",
+  description: "Build and explore your family tree.",
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body style={{ margin: 0 }}>{children}</body>
+      <body>{children}</body>
     </html>
   )
 }
