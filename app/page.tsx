@@ -1,28 +1,51 @@
-export default function Home() {
-  return (
-    <main style={{ minHeight: "100vh", padding: "48px 24px", fontFamily: "Arial, sans-serif", background: "#f7f7f5" }}>
-      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <header style={{ marginBottom: 40 }}>
-          <p style={{ margin: 0, color: "#666", fontSize: 14, letterSpacing: 1 }}>FAMILY GENEALOGY</p>
-          <h1 style={{ fontSize: 42, margin: "10px 0" }}>Discover your family story</h1>
-          <p style={{ color: "#555", fontSize: 18, maxWidth: 700 }}>
-            Build, explore, and preserve your family tree in one place.
-          </p>
-        </header>
+"use client"
 
-        <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20 }}>
-          {[
-            ["Family Tree", "Explore relationships across generations."],
-            ["People", "Keep names, dates, places, and stories together."],
-            ["Memories", "Preserve important family history for future generations."],
-          ].map(([title, description]) => (
-            <article key={title} style={{ background: "white", border: "1px solid #ddd", borderRadius: 16, padding: 24 }}>
-              <h2 style={{ marginTop: 0 }}>{title}</h2>
-              <p style={{ color: "#666", lineHeight: 1.6 }}>{description}</p>
-            </article>
-          ))}
-        </section>
-      </div>
-    </main>
-  )
+import { FormEvent, useEffect, useMemo, useState } from "react"
+
+type Person={id:string;first:string;last:string;gender:string;birth:string;death:string;city:string;notes:string;parentIds:string[];spouseId:string}
+
+const seed:Person[]=[
+{id:"1",first:"Ramesh",last:"Sharma",gender:"M",birth:"1940",death:"2020",city:"Hyderabad",notes:"Family patriarch.",parentIds:[],spouseId:"2"},
+{id:"2",first:"Sita",last:"Sharma",gender:"F",birth:"1945",death:"",city:"Hyderabad",notes:"Family matriarch.",parentIds:[],spouseId:"1"},
+{id:"3",first:"Arun",last:"Sharma",gender:"M",birth:"1968",death:"",city:"Bengaluru",notes:"Eldest son.",parentIds:["1","2"],spouseId:"4"},
+{id:"4",first:"Meena",last:"Sharma",gender:"F",birth:"1971",death:"",city:"Bengaluru",notes:"",parentIds:[],spouseId:"3"},
+{id:"5",first:"Priya",last:"Sharma",gender:"F",birth:"1995",death:"",city:"Fairfax",notes:"Family historian.",parentIds:["3","4"],spouseId:""},
+]
+
+const uid=()=>Math.random().toString(36).slice(2,10)
+const initials=(p:Person)=>`${p.first[0]||""}${p.last[0]||""}`.toUpperCase()
+
+export default function Home(){
+ const [people,setPeople]=useState<Person[]>(seed)
+ const [tab,setTab]=useState("tree")
+ const [selected,setSelected]=useState("1")
+ const [query,setQuery]=useState("")
+ const [modal,setModal]=useState<"add"|"edit"|"relationship"|null>(null)
+ const [hydrated,setHydrated]=useState(false)
+ useEffect(()=>{try{const raw=localStorage.getItem("family-tree-v1");if(raw)setPeople(JSON.parse(raw))}catch{}setHydrated(true)},[])
+ useEffect(()=>{if(hydrated)localStorage.setItem("family-tree-v1",JSON.stringify(people))},[people,hydrated])
+ const current=people.find(p=>p.id===selected)||people[0]
+ const children=useMemo(()=>current?people.filter(p=>p.parentIds.includes(current.id)):[],[people,current])
+ const parents=useMemo(()=>current?people.filter(p=>current.parentIds.includes(p.id)):[],[people,current])
+ const spouse=current?.spouseId?people.find(p=>p.id===current.spouseId):undefined
+ const filtered=people.filter(p=>`${p.first} ${p.last}`.toLowerCase().includes(query.toLowerCase()))
+
+ function addPerson(e:FormEvent<HTMLFormElement>){e.preventDefault();const f=new FormData(e.currentTarget);const p:Person={id:uid(),first:String(f.get("first")||""),last:String(f.get("last")||""),gender:String(f.get("gender")||"U"),birth:String(f.get("birth")||""),death:String(f.get("death")||""),city:String(f.get("city")||""),notes:String(f.get("notes")||""),parentIds:[],spouseId:""};setPeople(x=>[...x,p]);setSelected(p.id);setModal(null)}
+ function editPerson(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!current)return;const f=new FormData(e.currentTarget);setPeople(x=>x.map(p=>p.id===current.id?{...p,first:String(f.get("first")||""),last:String(f.get("last")||""),gender:String(f.get("gender")||"U"),birth:String(f.get("birth")||""),death:String(f.get("death")||""),city:String(f.get("city")||""),notes:String(f.get("notes")||"")}:p));setModal(null)}
+ function relation(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!current)return;const f=new FormData(e.currentTarget);const other=String(f.get("person")||"");const type=String(f.get("type")||"child");setPeople(x=>x.map(p=>p.id===current.id?{...p,parentIds:type==="parent"?[...new Set([...p.parentIds,other])]:p.parentIds,spouseId:type==="spouse"?other:p.spouseId}:p.id===other?{...p,parentIds:type==="child"?[...new Set([...p.parentIds,current.id])]:p.parentIds,spouseId:type==="spouse"?current.id:p.spouseId}:p));setModal(null)}
+ function remove(){if(!current||!confirm(`Delete ${current.first} ${current.last}?`))return;setPeople(x=>x.filter(p=>p.id!==current.id).map(p=>({...p,parentIds:p.parentIds.filter(id=>id!==current.id),spouseId:p.spouseId===current.id?"":p.spouseId})));setSelected(people.find(p=>p.id!==current.id)?.id||"")}
+
+ const Card=({p}:{p:Person})=><button className={`person ${selected===p.id?"selected":""}`} onClick={()=>setSelected(p.id)}><div className="personrow"><div className="avatar">{initials(p)}</div><div><h3>{p.first} {p.last}</h3><small>{p.birth||"Unknown"}{p.death?` — ${p.death}`:""}</small></div></div></button>
+ return <div className="app">
+  <header className="topbar"><div className="brand"><div className="logo">⌘</div><span>Family Tree</span></div><div className="actions"><button className="secondary" onClick={()=>setModal("relationship")}>Connect</button><button className="primary" onClick={()=>setModal("add")}>+ Add person</button></div></header>
+  <div className="layout"><aside className="sidebar"><nav className="nav">{[["tree","🌳 Tree"],["people","👥 People"],["profile","👤 Profile"]].map(([id,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{label}</button>)}</nav><div style={{marginTop:28,padding:14}}><small className="muted">Your family</small><div style={{fontWeight:800,marginTop:6}}>{people.length} people</div><div className="muted" style={{fontSize:12,marginTop:4}}>Saved automatically</div></div></aside>
+  <main className="content">
+   {tab==="tree"&&<><div className="heading"><div><h1>Family tree</h1><p className="muted">Click any person to explore their family.</p></div><div className="actions"><button className="secondary" onClick={()=>setPeople(seed)}>Reset demo</button></div></div><div className="grid" style={{marginBottom:16}}><div className="card stat"><div><span>People</span><strong>{people.length}</strong></div><span>members</span></div><div className="card stat"><div><span>Parents</span><strong>{people.filter(p=>p.parentIds.length).length}</strong></div><span>connected</span></div><div className="card stat"><div><span>Generations</span><strong>{people.length?Math.max(...people.map(p=>p.parentIds.length?2:1)):0}</strong></div><span>tracked</span></div></div><div className="tree"><div className="generation">{parents.map(p=><Card key={p.id} p={p}/>)}</div>{parents.length>0&&<div className="connector"/>}<div className="generation">{current&&<Card p={current}/>} {spouse&&<Card p={spouse}/>}</div>{children.length>0&&<><div className="connector"/><div className="generation">{children.map(p=><Card key={p.id} p={p}/>)}</div></>}</div></>}
+   {tab==="people"&&<><div className="heading"><div><h1>People</h1><p className="muted">Manage everyone in your family tree.</p></div><button className="primary" onClick={()=>setModal("add")}>+ Add person</button></div><div className="card"><input className="search" placeholder="Search by name..." value={query} onChange={e=>setQuery(e.target.value)}/><table className="table"><thead><tr><th>Name</th><th>Birth</th><th>Location</th><th>Relationships</th></tr></thead><tbody>{filtered.map(p=><tr key={p.id} onClick={()=>{setSelected(p.id);setTab("profile")}} style={{cursor:"pointer"}}><td><b>{p.first} {p.last}</b></td><td>{p.birth||"—"}</td><td>{p.city||"—"}</td><td>{p.parentIds.length?`${p.parentIds.length} parent(s)`:"No parents"}</td></tr>)}</tbody></table>{!filtered.length&&<div className="empty">No people found.</div>}</div></>}
+   {tab==="profile"&&current&&<><div className="heading"><div><h1>Person profile</h1><p className="muted">A complete record for this family member.</p></div><div className="actions"><button className="secondary" onClick={()=>setModal("edit")}>Edit</button><button className="danger" onClick={remove}>Delete</button></div></div><div className="card"><div className="detail"><div><div className="avatar">{initials(current)}</div></div><div><span className="badge">{current.gender==="M"?"Male":current.gender==="F"?"Female":"Family member"}</span><h2>{current.first} {current.last}</h2><p className="muted">{current.notes||"No biography added yet."}</p><div className="facts"><div className="fact"><b>Born</b>{current.birth||"Unknown"}</div><div className="fact"><b>Died</b>{current.death||"Living / unknown"}</div><div className="fact"><b>Place</b>{current.city||"Unknown"}</div><div className="fact"><b>Parents</b>{parents.length?parents.map(p=>p.first).join(", "):"Not connected"}</div></div></div></div></div></>}
+  </main></div>
+  {modal&&<div className="modalback" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}><div className="modal"><div className="modalhead"><h2>{modal==="add"?"Add family member":modal==="edit"?"Edit person":"Connect people"}</h2><button className="close" onClick={()=>setModal(null)}>×</button></div>
+   {modal==="relationship"?<form onSubmit={relation}><div className="formgrid"><div className="field"><label>Relationship</label><select name="type" defaultValue="child"><option value="child">Add as child</option><option value="parent">Add as parent</option><option value="spouse">Add as spouse</option></select></div><div className="field"><label>Person</label><select name="person" required defaultValue=""><option value="" disabled>Select person</option>{people.filter(p=>p.id!==current?.id).map(p=><option key={p.id} value={p.id}>{p.first} {p.last}</option>)}</select></div></div><div className="actions" style={{justifyContent:"flex-end",marginTop:20}}><button type="button" className="secondary" onClick={()=>setModal(null)}>Cancel</button><button className="primary">Save relationship</button></div></form>:<form onSubmit={modal==="add"?addPerson:editPerson}><div className="formgrid"><div className="field"><label>First name</label><input name="first" required defaultValue={modal==="edit"?current?.first:""}/></div><div className="field"><label>Last name</label><input name="last" required defaultValue={modal==="edit"?current?.last:""}/></div><div className="field"><label>Gender</label><select name="gender" defaultValue={modal==="edit"?current?.gender:"U"}><option value="U">Not specified</option><option value="M">Male</option><option value="F">Female</option></select></div><div className="field"><label>Birth year</label><input name="birth" placeholder="e.g. 1985" defaultValue={modal==="edit"?current?.birth:""}/></div><div className="field"><label>Death year</label><input name="death" defaultValue={modal==="edit"?current?.death:""}/></div><div className="field"><label>Birth/place</label><input name="city" placeholder="City, country" defaultValue={modal==="edit"?current?.city:""}/></div></div><div className="field" style={{marginTop:14}}><label>Notes / biography</label><textarea name="notes" defaultValue={modal==="edit"?current?.notes:""}/></div><div className="actions" style={{justifyContent:"flex-end",marginTop:20}}><button type="button" className="secondary" onClick={()=>setModal(null)}>Cancel</button><button className="primary">{modal==="add"?"Add person":"Save changes"}</button></div></form>}
+  </div></div>}
+ </div>
 }
